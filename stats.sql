@@ -97,8 +97,40 @@ SELECT buffers_clean, maxwritten_clean, buffers_backend_fsync FROM pg_stat_bgwri
 SELECT relname, pg_size_pretty(pg_relation_size(relname::regclass)) as size, seq_scan, seq_tup_read, seq_scan / seq_tup_read as seq_tup_avg FROM pg_stat_user_tables WHERE seq_tup_read > 0 ORDER BY 3,4 desc limit 5;
 -- seq_tup_avg should be < 1000
 
+                                                
+------------------------------ CHECKPOINTS
+                                                
 -- Checkpoints
 SELECT 'bad' as checkpoints FROM pg_stat_bgwriter WHERE checkpoints_req > checkpoints_timed;
+                                                
+SELECT * FROM pg_stat_bgwriter WHERE checkpoints_req > checkpoints_timed;
+
+SELECT
+    total_checkpoints,
+    seconds_since_start / total_checkpoints / 60 AS minutes_between_checkpoints
+FROM
+(
+    SELECT
+        EXTRACT(EPOCH FROM (now() - pg_postmaster_start_time())) AS seconds_since_start,
+        (checkpoints_timed+checkpoints_req) AS total_checkpoints
+    FROM 
+        pg_stat_bgwriter
+) AS sub;
+
+-- minutes_between_checkpoints usually should be > 10min
+
+-- if bad, check the configs
+SELECT * from pg_settings where name IN ('checkpoint_timeout', 'checkpoint_completion_target', 'checkpoint_flush_after', 'checkpoint_warning', 'max_wal_size', 'min_wal_size')
+
+
+-- to get the perfect wal log size, follow: https://www.2ndquadrant.com/en/blog/basics-of-tuning-checkpoints/
+
+-- To current log on PG11
+SELECT pg_current_wal_insert_lsn();
+
+-- To get the size between 2 checkpoints on PG11
+SELECT pg_wal_lsn_diff('300B4/5DBD1858', '300B4/628BC0F0');
+
 
 
 
